@@ -16,34 +16,47 @@ jobs:
       - name: 📥 Tải mã nguồn (Checkout)
         uses: actions/checkout@v4
 
-      - name: 🧹 Chuẩn hóa mã nguồn (Fix CRLF & Định dạng Apple)
+      - name: 🔍 Tự động định vị thư mục Sources & Headers
         run: |
-          # 1. Xóa ký tự xuống dòng Windows \r
-          find . -type f \( -name "*.m" -o -name "*.h" -o -name "*.sh" -o -name "*.xm" \) -exec sed -i '' 's/\r$//' {} +
-          # 2. Đảm bảo tương thích định danh movie trên mọi phiên bản SDK
-          sed -i '' 's/(NSString \*)kUTTypeMovie/@"public.movie"/g' Sources/VSFloatingHUD.m 2>/dev/null || true
+          echo "=== Cấu trúc thư mục hiện tại ==="
+          pwd
+          ls -la
 
-      - name: 🍎 Thiết lập Xcode & iOS SDK
-        run: |
-          sudo xcode-select -switch /Applications/Xcode.app/Contents/Developer
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV
-          echo "Đã tìm thấy iOS SDK: $SDK_PATH"
+          # Tự động tìm đường dẫn chính xác của file VSLayerFilter.m
+          SRC_FILE=$(find . -name "VSLayerFilter.m" | head -n 1)
+          if [ -z "$SRC_FILE" ]; then
+            echo "❌ Lỗi: Không tìm thấy file VSLayerFilter.m trong toàn bộ repository!"
+            find .
+            exit 1
+          fi
 
-      - name: 🔨 Biên dịch trực tiếp ra file .dylib (Clang)
+          SRC_DIR=$(dirname "$SRC_FILE")
+          HDR_FILE=$(find . -name "VideoStarHeaders.h" | head -n 1)
+          HDR_DIR=$(dirname "$HDR_FILE")
+
+          echo "✅ Đã tìm thấy Sources tại: $SRC_DIR"
+          echo "✅ Đã tìm thấy Headers tại: $HDR_DIR"
+
+          echo "SRC_DIR=$SRC_DIR" >> $GITHUB_ENV
+          echo "HDR_DIR=$HDR_DIR" >> $GITHUB_ENV
+
+      - name: 🔨 Biên dịch file .dylib (Clang)
         run: |
           mkdir -p build
 
-          CFLAGS="-target arm64-apple-ios14.0 -isysroot $SDK_PATH -fobjc-arc -O2 -I./Headers -Wall -Wno-deprecated-declarations"
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "Đang dùng iOS SDK: $SDK_PATH"
+
+          CFLAGS="-target arm64-apple-ios14.0 -isysroot $SDK_PATH -fobjc-arc -O2 -I$HDR_DIR -w"
           FRAMEWORKS="-framework Foundation -framework UIKit -framework Photos -framework PhotosUI -framework AVFoundation -framework QuartzCore -framework CoreGraphics -framework UniformTypeIdentifiers -framework MobileCoreServices"
 
-          echo "=== 1. Biên dịch các file Object (.o) ==="
-          clang $CFLAGS -c Sources/VSLayerFilter.m -o build/VSLayerFilter.o
-          clang $CFLAGS -c Sources/VSAutoLayerManager.m -o build/VSAutoLayerManager.o
-          clang $CFLAGS -c Sources/VSFloatingHUD.m -o build/VSFloatingHUD.o
-          clang $CFLAGS -c Sources/Tweak_Standalone.m -o build/Tweak_Standalone.o
+          echo "1. Biên dịch các file mã nguồn..."
+          clang $CFLAGS -c "$SRC_DIR/VSLayerFilter.m" -o build/VSLayerFilter.o
+          clang $CFLAGS -c "$SRC_DIR/VSAutoLayerManager.m" -o build/VSAutoLayerManager.o
+          clang $CFLAGS -c "$SRC_DIR/VSFloatingHUD.m" -o build/VSFloatingHUD.o
+          clang $CFLAGS -c "$SRC_DIR/Tweak_Standalone.m" -o build/Tweak_Standalone.o
 
-          echo "=== 2. Liên kết tạo thư viện động (.dylib) ==="
+          echo "2. Liên kết tạo file thư viện động .dylib..."
           clang -dynamiclib \
                 -target arm64-apple-ios14.0 \
                 -isysroot "$SDK_PATH" \
@@ -55,7 +68,7 @@ jobs:
                 build/Tweak_Standalone.o \
                 -o build/VideoStarAutoLayerTweak.dylib
 
-          echo "=== 3. Ký mã giả lập ==="
+          echo "3. Ký mã giả lập..."
           codesign -s - build/VideoStarAutoLayerTweak.dylib || true
 
           ls -lh build/
