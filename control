@@ -1,0 +1,9 @@
+Package: com.expert.videostarautolayer
+Name: Video Star Auto-Layer Pro
+Depends: mobilesubstrate (>= 0.9.5000)
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Automated Multi-Layer Asset Importer & Smart Filter Tweak for Video Star
+Maintainer: iOS Tweak Expert
+Author: iOS Tweak Expert
+Section: Tweaks
