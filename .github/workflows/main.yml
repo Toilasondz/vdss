@@ -1,0 +1,67 @@
+name: Build Video Star Tweak
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iOS Dylib
+    runs-on: macos-14
+
+    steps:
+      - name: 📥 Tải mã nguồn (Checkout)
+        uses: actions/checkout@v4
+
+      - name: 🧹 Chuẩn hóa mã nguồn (Fix CRLF & Định dạng Apple)
+        run: |
+          # 1. Xóa ký tự xuống dòng Windows \r
+          find . -type f \( -name "*.m" -o -name "*.h" -o -name "*.sh" -o -name "*.xm" \) -exec sed -i '' 's/\r$//' {} +
+          # 2. Đảm bảo tương thích định danh movie trên mọi phiên bản SDK
+          sed -i '' 's/(NSString \*)kUTTypeMovie/@"public.movie"/g' Sources/VSFloatingHUD.m 2>/dev/null || true
+
+      - name: 🍎 Thiết lập Xcode & iOS SDK
+        run: |
+          sudo xcode-select -switch /Applications/Xcode.app/Contents/Developer
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK_PATH=$SDK_PATH" >> $GITHUB_ENV
+          echo "Đã tìm thấy iOS SDK: $SDK_PATH"
+
+      - name: 🔨 Biên dịch trực tiếp ra file .dylib (Clang)
+        run: |
+          mkdir -p build
+
+          CFLAGS="-target arm64-apple-ios14.0 -isysroot $SDK_PATH -fobjc-arc -O2 -I./Headers -Wall -Wno-deprecated-declarations"
+          FRAMEWORKS="-framework Foundation -framework UIKit -framework Photos -framework PhotosUI -framework AVFoundation -framework QuartzCore -framework CoreGraphics -framework UniformTypeIdentifiers -framework MobileCoreServices"
+
+          echo "=== 1. Biên dịch các file Object (.o) ==="
+          clang $CFLAGS -c Sources/VSLayerFilter.m -o build/VSLayerFilter.o
+          clang $CFLAGS -c Sources/VSAutoLayerManager.m -o build/VSAutoLayerManager.o
+          clang $CFLAGS -c Sources/VSFloatingHUD.m -o build/VSFloatingHUD.o
+          clang $CFLAGS -c Sources/Tweak_Standalone.m -o build/Tweak_Standalone.o
+
+          echo "=== 2. Liên kết tạo thư viện động (.dylib) ==="
+          clang -dynamiclib \
+                -target arm64-apple-ios14.0 \
+                -isysroot "$SDK_PATH" \
+                -install_name "@rpath/VideoStarAutoLayerTweak.dylib" \
+                $FRAMEWORKS \
+                build/VSLayerFilter.o \
+                build/VSAutoLayerManager.o \
+                build/VSFloatingHUD.o \
+                build/Tweak_Standalone.o \
+                -o build/VideoStarAutoLayerTweak.dylib
+
+          echo "=== 3. Ký mã giả lập ==="
+          codesign -s - build/VideoStarAutoLayerTweak.dylib || true
+
+          ls -lh build/
+
+      - name: 📤 Xuất file VideoStarAutoLayerTweak.dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoStarAutoLayerTweak-dylib
+          path: build/VideoStarAutoLayerTweak.dylib
