@@ -1,63 +1,98 @@
-name: Build Video Star Tweak
+name: Build VideoStar Dylibs
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build iOS Dylib
     runs-on: macos-14
 
     steps:
-      - name: 📥 Tải mã nguồn (Checkout)
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: 🧹 Tự động sửa lỗi cú pháp NSFileManager & định dạng
-        run: |
-          # Sửa defaultCenter thành defaultManager
-          sed -i '' 's/\[NSFileManager defaultCenter\]/\[NSFileManager defaultManager\]/g' Sources/VSFloatingHUD.m 2>/dev/null || true
-          # Fix định danh movie tương thích
-          sed -i '' 's/(NSString \*)kUTTypeMovie/@"public.movie"/g' Sources/VSFloatingHUD.m 2>/dev/null || true
+    - name: Show Xcode and SDK info
+      run: |
+        xcode-select -p
+        xcrun --sdk iphoneos --show-sdk-path
+        clang --version
 
-      - name: 🔨 Biên dịch file .dylib (Clang)
-        run: |
-          mkdir -p build
+    - name: Fix line endings (CRLF → LF)
+      run: |
+        find . -name "*.m" -exec sed -i '' 's/\r$//' {} \;
+        find . -name "*.h" -exec sed -i '' 's/\r$//' {} \;
 
-          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "Đang dùng iOS SDK: $SDK_PATH"
+    - name: Create build directory
+      run: mkdir -p build
 
-          CFLAGS="-target arm64-apple-ios14.0 -isysroot $SDK_PATH -fobjc-arc -O2 -IHeaders -w"
-          FRAMEWORKS="-framework Foundation -framework UIKit -framework Photos -framework PhotosUI -framework AVFoundation -framework QuartzCore -framework CoreGraphics -framework UniformTypeIdentifiers -framework MobileCoreServices"
+    - name: Compile VS40Layers.dylib (Mở Khóa 40 Lớp Video Star 14)
+      run: |
+        SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+        echo "Compiling VS40Layers.dylib with SDK: $SDK"
 
-          echo "1. Biên dịch các file mã nguồn..."
-          clang $CFLAGS -c Sources/VSLayerFilter.m -o build/VSLayerFilter.o
-          clang $CFLAGS -c Sources/VSAutoLayerManager.m -o build/VSAutoLayerManager.o
-          clang $CFLAGS -c Sources/VSFloatingHUD.m -o build/VSFloatingHUD.o
-          clang $CFLAGS -c Sources/Tweak_Standalone.m -o build/Tweak_Standalone.o
+        clang \
+          -arch arm64 \
+          -isysroot "$SDK" \
+          -mios-version-min=14.0 \
+          -fobjc-arc \
+          -shared \
+          -fmodules \
+          -framework UIKit \
+          -framework Foundation \
+          -framework CoreGraphics \
+          -o build/VS40Layers.dylib \
+          Sources/VS40Layers.m
 
-          echo "2. Liên kết tạo thư viện .dylib..."
-          clang -dynamiclib \
-                -target arm64-apple-ios14.0 \
-                -isysroot "$SDK_PATH" \
-                -install_name "@rpath/VideoStarAutoLayerTweak.dylib" \
-                $FRAMEWORKS \
-                build/VSLayerFilter.o \
-                build/VSAutoLayerManager.o \
-                build/VSFloatingHUD.o \
-                build/Tweak_Standalone.o \
-                -o build/VideoStarAutoLayerTweak.dylib
+        echo "✅ VS40Layers.dylib compiled successfully!"
 
-          echo "3. Ký mã giả lập..."
-          codesign -s - build/VideoStarAutoLayerTweak.dylib || true
+    - name: Compile VideoStarTool.dylib (Menu Đa Năng by hson)
+      run: |
+        SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+        echo "Compiling VideoStarTool.dylib with SDK: $SDK"
 
-          ls -lh build/
+        clang \
+          -arch arm64 \
+          -isysroot "$SDK" \
+          -mios-version-min=14.0 \
+          -fobjc-arc \
+          -shared \
+          -fmodules \
+          -framework UIKit \
+          -framework Foundation \
+          -framework Photos \
+          -framework PhotosUI \
+          -framework CoreGraphics \
+          -o build/VideoStarTool.dylib \
+          Sources/Tweak_Standalone.m
 
-      - name: 📤 Xuất file VideoStarAutoLayerTweak.dylib
-        uses: actions/upload-artifact@v4
-        with:
-          name: VideoStarAutoLayerTweak-dylib
-          path: build/VideoStarAutoLayerTweak.dylib
+        echo "✅ VideoStarTool.dylib compiled successfully!"
+        ls -lh build/
+
+    - name: Verify compiled dylibs
+      run: |
+        file build/*.dylib
+
+    - name: Upload VS40Layers dylib
+      uses: actions/upload-artifact@v4
+      with:
+        name: VS40Layers-dylib
+        path: build/VS40Layers.dylib
+        retention-days: 30
+
+    - name: Upload VideoStarTool dylib
+      uses: actions/upload-artifact@v4
+      with:
+        name: VideoStarTool-dylib
+        path: build/VideoStarTool.dylib
+        retention-days: 30
+
+    - name: Upload All Dylibs Pack
+      uses: actions/upload-artifact@v4
+      with:
+        name: VideoStar-Dylibs-All
+        path: build/*.dylib
+        retention-days: 30
