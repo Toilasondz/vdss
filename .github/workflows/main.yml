@@ -16,29 +16,12 @@ jobs:
       - name: 📥 Tải mã nguồn (Checkout)
         uses: actions/checkout@v4
 
-      - name: 🔍 Tự động định vị thư mục Sources & Headers
+      - name: 🧹 Tự động sửa lỗi cú pháp NSFileManager & định dạng
         run: |
-          echo "=== Cấu trúc thư mục hiện tại ==="
-          pwd
-          ls -la
-
-          # Tự động tìm đường dẫn chính xác của file VSLayerFilter.m
-          SRC_FILE=$(find . -name "VSLayerFilter.m" | head -n 1)
-          if [ -z "$SRC_FILE" ]; then
-            echo "❌ Lỗi: Không tìm thấy file VSLayerFilter.m trong toàn bộ repository!"
-            find .
-            exit 1
-          fi
-
-          SRC_DIR=$(dirname "$SRC_FILE")
-          HDR_FILE=$(find . -name "VideoStarHeaders.h" | head -n 1)
-          HDR_DIR=$(dirname "$HDR_FILE")
-
-          echo "✅ Đã tìm thấy Sources tại: $SRC_DIR"
-          echo "✅ Đã tìm thấy Headers tại: $HDR_DIR"
-
-          echo "SRC_DIR=$SRC_DIR" >> $GITHUB_ENV
-          echo "HDR_DIR=$HDR_DIR" >> $GITHUB_ENV
+          # Sửa defaultCenter thành defaultManager
+          sed -i '' 's/\[NSFileManager defaultCenter\]/\[NSFileManager defaultManager\]/g' Sources/VSFloatingHUD.m 2>/dev/null || true
+          # Fix định danh movie tương thích
+          sed -i '' 's/(NSString \*)kUTTypeMovie/@"public.movie"/g' Sources/VSFloatingHUD.m 2>/dev/null || true
 
       - name: 🔨 Biên dịch file .dylib (Clang)
         run: |
@@ -47,16 +30,16 @@ jobs:
           SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path)
           echo "Đang dùng iOS SDK: $SDK_PATH"
 
-          CFLAGS="-target arm64-apple-ios14.0 -isysroot $SDK_PATH -fobjc-arc -O2 -I$HDR_DIR -w"
+          CFLAGS="-target arm64-apple-ios14.0 -isysroot $SDK_PATH -fobjc-arc -O2 -IHeaders -w"
           FRAMEWORKS="-framework Foundation -framework UIKit -framework Photos -framework PhotosUI -framework AVFoundation -framework QuartzCore -framework CoreGraphics -framework UniformTypeIdentifiers -framework MobileCoreServices"
 
           echo "1. Biên dịch các file mã nguồn..."
-          clang $CFLAGS -c "$SRC_DIR/VSLayerFilter.m" -o build/VSLayerFilter.o
-          clang $CFLAGS -c "$SRC_DIR/VSAutoLayerManager.m" -o build/VSAutoLayerManager.o
-          clang $CFLAGS -c "$SRC_DIR/VSFloatingHUD.m" -o build/VSFloatingHUD.o
-          clang $CFLAGS -c "$SRC_DIR/Tweak_Standalone.m" -o build/Tweak_Standalone.o
+          clang $CFLAGS -c Sources/VSLayerFilter.m -o build/VSLayerFilter.o
+          clang $CFLAGS -c Sources/VSAutoLayerManager.m -o build/VSAutoLayerManager.o
+          clang $CFLAGS -c Sources/VSFloatingHUD.m -o build/VSFloatingHUD.o
+          clang $CFLAGS -c Sources/Tweak_Standalone.m -o build/Tweak_Standalone.o
 
-          echo "2. Liên kết tạo file thư viện động .dylib..."
+          echo "2. Liên kết tạo thư viện .dylib..."
           clang -dynamiclib \
                 -target arm64-apple-ios14.0 \
                 -isysroot "$SDK_PATH" \
