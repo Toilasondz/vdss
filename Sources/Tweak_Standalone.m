@@ -20,51 +20,7 @@ static BOOL            gPanelVisible = NO;
 static UIColor *kCyan(void)    { return [UIColor colorWithRed:0.20 green:0.85 blue:1.00 alpha:1.0]; }
 static UIColor *kPanelBg(void) { return [UIColor colorWithRed:0.04 green:0.07 blue:0.10 alpha:1.0]; }
 
-#pragma mark - 1. Custom Window (Fix Lỗi Không Ấn Được App)
-
-@interface VSTWindow : UIWindow
-@end
-
-@implementation VSTWindow
-
-// Không cho phép cướp quyền Key Window của Video Star
-- (BOOL)canBecomeKeyWindow {
-    return NO;
-}
-
-// Cho phép cảm ứng xuyên thấu xuống Video Star
-- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    // 1. Nếu ngón tay chạm vào Nút tròn nổi -> Nhận cảm ứng
-    if (gFloat && !gFloat.hidden && gFloat.alpha > 0.01) {
-        CGPoint pFloat = [self convertPoint:point toView:gFloat];
-        if ([gFloat pointInside:pFloat withEvent:event]) {
-            return YES;
-        }
-    }
-
-    // 2. Nếu bảng menu đang mở và ngón tay chạm vào Menu -> Nhận cảm ứng
-    if (gPanel && !gPanel.hidden && gPanel.alpha > 0.01) {
-        CGPoint pPanel = [self convertPoint:point toView:gPanel];
-        if ([gPanel pointInside:pPanel withEvent:event]) {
-            return YES;
-        }
-    }
-
-    // 3. Ngoài 2 vùng trên: BỎ QUA HOÀN TOÀN -> Chuyển cảm ứng xuống Video Star bên dưới
-    return NO;
-}
-
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    UIView *hit = [super hitTest:point withEvent:event];
-    if (hit == self || hit == self.rootViewController.view) {
-        return nil;
-    }
-    return hit;
-}
-
-@end
-
-#pragma mark - 2. Toggle Cell
+#pragma mark - 1. Toggle Cell
 
 @interface VSTToggleCell : UIView
 @property (nonatomic, strong) UILabel *titleLabel;
@@ -126,7 +82,7 @@ static UIColor *kPanelBg(void) { return [UIColor colorWithRed:0.04 green:0.07 bl
 
 @end
 
-#pragma mark - 3. Panel Giao Diện Chính
+#pragma mark - 2. Panel Giao Diện Chính
 
 @interface VSTPanel : UIView
 @property (nonatomic, strong) UIView *header;
@@ -432,7 +388,7 @@ static UIColor *kPanelBg(void) { return [UIColor colorWithRed:0.04 green:0.07 bl
 
 @end
 
-#pragma mark - 4. Nút Bấm Trôi Nổi (Float Button)
+#pragma mark - 3. Nút Bấm Trôi Nổi (Float Button)
 
 @interface VSTFloatButton : UIView
 @property (nonatomic, strong) UILabel *sub;
@@ -503,7 +459,46 @@ static UIColor *kPanelBg(void) { return [UIColor colorWithRed:0.04 green:0.07 bl
 
 @end
 
-#pragma mark - 5. Khởi Tạo & Hook
+#pragma mark - 4. Custom Window (Đặt sau VSTPanel & VSTFloatButton để fix lỗi forward class)
+
+@interface VSTWindow : UIWindow
+@end
+
+@implementation VSTWindow
+
+- (BOOL)canBecomeKeyWindow {
+    return NO;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    if (gFloat && !gFloat.hidden && gFloat.alpha > 0.01) {
+        CGPoint pFloat = [self convertPoint:point toView:gFloat];
+        if ([gFloat pointInside:pFloat withEvent:event]) {
+            return YES;
+        }
+    }
+
+    if (gPanel && !gPanel.hidden && gPanel.alpha > 0.01) {
+        CGPoint pPanel = [self convertPoint:point toView:gPanel];
+        if ([gPanel pointInside:pPanel withEvent:event]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hit = [super hitTest:point withEvent:event];
+    if (hit == self || hit == self.rootViewController.view) {
+        return nil;
+    }
+    return hit;
+}
+
+@end
+
+#pragma mark - 5. Khởi Tạo & Hook Runtime
 
 static void VSTSetup(void) {
     if (gWindow) return;
